@@ -46,6 +46,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ap-south-1
+    - name: Install AWS CLI
+      run: |
+        sudo apt-get install -y awscli
     - name: Build and run Docker image
       run: |
         docker build -t python-flask:1 .
@@ -53,5 +56,3 @@ jobs:
     - name: Deploy to CodeDeploy
       run: |
         aws deploy create-deployment --application-name python_flask --deployment-group-name python_flask --s3-location bucket=pythonflask1,key=app.zip,bundleType=zip
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION: ap-south-1
