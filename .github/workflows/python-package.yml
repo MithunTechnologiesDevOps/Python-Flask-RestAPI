@@ -38,3 +38,7 @@ jobs:
     - name: Run Flask App
       run: |
         python app.py
+    - name: Build Docker image
+      run: |
+        docker build -t python-flask:1 .
+        docker run --name python-flask -p 5000:5000 -d python-flask:1
