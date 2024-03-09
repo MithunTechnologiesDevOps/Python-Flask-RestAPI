@@ -1,16 +1,18 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Python package
+name: Python Package CI/CD
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - master
   pull_request:
-    branches: [ "master" ]
+    branches:
+      - master
 
 jobs:
-  build:
+  build-and-deploy:
 
     runs-on: ubuntu-latest
     strategy:
@@ -19,22 +21,54 @@ jobs:
         python-version: ["3.7"]
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python -m pip install flake8
+        if [ -f requirements-prod.txt ]; then pip install -r requirements-prod.txt; fi
+
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
     - name: Run Flask App
       run: |
         python app.py
+
+    - name: Set execute permission for deploy.sh
+      run: |
+        chmod +x deploy.sh
+
+    - name: Deploy to S3
+      run: |
+        ./deploy.sh
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+        aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+        aws-region: '${{ secrets.AWS_REGION }}'
+
+    - name: Get current date and time
+      id: date
+      run: 'echo "::set-output name=date::$(date +''%Y-%m-%d-%H:%M:%S'')"'
+
+    - name: Build and run Docker image
+      run: |
+        docker build -t python-flask:1 .
+        docker run --name python-flask -p 5000:5000 -d python-flask:1
+
+    - name: Deploy using AWS CodeDeploy
+      id: deploy
+      run: |
+        aws deploy create-deployment --application-name python_flask --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name python_flask --file-exists-behavior OVERWRITE --s3-location bucket=pythonflask1,key=app.zip-${{ github.sha }}-${{ steps.date.outputs.date }}.zip,bundleType=zip
